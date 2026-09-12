@@ -1,5 +1,5 @@
 /**
- * dsh-okf-memory client(浏览器半) — 记忆图谱会话标签页。
+ * okf-memory client(浏览器半,dsh 专用) — 记忆图谱会话标签页。
  *
  * 契约:
  *  - package.json 声明 dsh.client { platform:'web', inject:[client服务] }

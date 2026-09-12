@@ -54,4 +54,4 @@ run('npm publish')
 
 // 6. 验证
 const pkg = JSON.parse(execSync('node -e "console.log(JSON.stringify(require(\'./package.json\')))"', { cwd: root }).toString())
-console.log(`\n✓ 已发布 dsh-okf-memory@${pkg.version} → https://www.npmjs.com/package/dsh-okf-memory`)
+console.log(`\n✓ 已发布 ${pkg.name}@${pkg.version} → https://www.npmjs.com/package/${pkg.name}`)

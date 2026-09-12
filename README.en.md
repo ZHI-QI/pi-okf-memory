@@ -1,148 +1,192 @@
-# dsh-okf-memory
+# pi-okf-memory
 
-[简体中文](README.md) | English
+**Session memory → OKF knowledge. Make pi remember you across sessions.**
 
-**Session-to-OKF memory plugin with neuro-self-learning: predictive recall, uncertainty-driven capture, reinforcement feedback, consolidation & forgetting.**
+High-value content from your sessions is distilled into long-term memory as [OKF v0.1](https://github.com/open-knowledge-format) documents, and recalled automatically in later sessions. Every pick, skip and correction is a learning signal — recall gets sharper the longer you use it.
 
-Turn high-value content from your conversations into persistent long-term memory, organized as [OKF v0.1](https://github.com/open-knowledge-format) knowledge documents. The agent gets smarter the more you use it — every selection, skip, and correction is a learning signal that updates memory weights.
+![Memory graph · search hit and neural propagation](docs/记忆图谱-demo.png)
 
-![Memory Graph · Neuro Self-Learning](docs/okf-memory-banner.png)
+---
 
-[![dshfind](https://dshfind.com/api/card/ZHI-QI/dsh-okf-memory?lang=en)](https://dshfind.com/zh/plugins/ZHI-QI/dsh-okf-memory?ref=badge)
+## Why
 
-## Features
+Every new pi session starts from zero, so you keep repeating yourself:
 
-- **Four-stage memory loop**: Capture → Concept-ize (OKF) → Consolidate → Recall
-- **OKF v0.1 compliant**: every concept is a standard Markdown document (frontmatter hard-requires `type`), `index.md` progressive catalog + `log.md` change history, cross-links use bundle-absolute paths
-- **Neuro-self-learning driver**: predictive recall (predict first, then verify by retrieval), uncertainty-driven exploration (expand search when confidence is low), prediction-error-driven capture (user corrections / first-time disclosures / counter-intuitive conclusions trigger writes), weight decay + archiving (consolidation & forgetting)
-- **Reinforcement feedback loop**: `score = relevance × weight × recency`; selecting a candidate raises its weight, skipping lowers it
-- **TechChoice memory**: frontend / backend / language / approach / config — one concept per dimension with an options table + active choice; three-tier selection rule (show all candidates, use the only candidate, or follow the matched dimension)
-- **Write permission gate**: type validity → dedup (complement, never duplicate, cross-link) → OKF compliance check
-- **Memory graph visualization (M2)**: a client panel renders a force-directed **memory graph** in the DSH conversation view — node size = weight, color = type; search hit → pulse halo + ⚡hit + neural spreading; zoom / pan / drag / hover details
-- **Graph data API**: `okf_graph` tool + `service.graph` produce `{nodes,edges,timeline}` JSON with a stable contract, reusable by any frontend
+> "I use pnpm, not npm."
+> "Revenue data comes from the Dezensaas MySQL — don't grep local files."
+> "We settled on React 18 + Vite last quarter; stop asking about the frontend."
+
+`pi-okf-memory` turns that into files. The memory is yours, not a black box:
+
+- **Readable** — plain Markdown. Open it, `git` it, hand-edit it.
+- **Portable** — one directory. Copy it and the whole memory moves with you.
+- **Honest** — when nothing matches, it says "not in the memory library" instead of making something up.
 
 ## Install
 
 ```sh
-# Any profile (e.g. web): published to npm, one-line install, no build approval
-dsh plugin --profile web add dsh-okf-memory
-# Or from a local checkout (dev):
-dsh plugin --profile web add ./dsh-okf-memory
-# Or from GitHub source (needs a prepare build + user build approval):
-dsh plugin --profile web add github:ZHI-QI/dsh-okf-memory
+pi install git:github.com/ZHI-QI/pi-okf-memory        # from GitHub
+pi install /path/to/pi-okf-memory                     # from a local checkout
+pi -e /path/to/pi-okf-memory/src/pi/index.ts          # try it without writing config
 ```
 
-**Published on npm**: `dsh-okf-memory@0.1.0` → https://www.npmjs.com/package/dsh-okf-memory
+Zero runtime dependencies and **no build step** — pi loads TypeScript directly via [jiti](https://github.com/unjs/jiti) and provides `typebox` / `@earendil-works/pi-*` through aliases.
 
-Zero runtime dependencies (peer dependency `@deepseek-ai/cordis` is provided by the dsh runtime; a peer warning during install can be ignored). Install and use — no build step, no build-script approval needed.
+## Usage
 
-## How to Use
+### You don't need to learn any commands
 
-Once installed you don't have to type any commands. The plugin injects a "memory discipline" system prompt that tells the agent to **decide on its own** what to remember and what to look up, using the tools below. You can also trigger it explicitly by saying "remember X" or "check the memory for X".
-
-### The 5 tools
-
-| Tool | What it does | When to use |
-|---|---|---|
-| `okf_remember` | Writes one memory (auto-dedup, validate, persist) | When something worth keeping is learned |
-| `okf_search` | Keyword recall, ranked by weight/recency | Session-start preload, find relevant memory before answering |
-| `okf_read` | Reads one memory in full (with cross-links), records a usage feedback | When you need complete detail |
-| `okf_forget` | Revokes one memory | When it was wrong / is no longer needed |
-| `okf_graph` | Exports the memory graph JSON (nodes/edges/timeline) | Visualization / handing off graph data |
-
-### Make it remember (write)
-
-- **Automatic (recommended)**: when you disclose new facts, make a decision, correct the agent, or mention a tech choice, the agent **judges on its own** whether to store it — you don't have to ask.
-- **Manual**: just say "remember…", e.g. `记住,我的三家门店是韶山/湘乡/塘厦,共用局域网共享文件夹`.
-
-**Worth remembering**: new background facts/preferences, decisions and their reasons, reusable methods/processes/lessons, user corrections, confirmed counter-intuitive conclusions, tech choices.
-**Not remembered**: small talk, one-off scaffolding questions, repeats of already-stored content, unverified guesses (those land in `Idea` until they mature).
-
-### Make it recall
-
-- When you ask something related, the agent runs `okf_search` first, then answers.
-- You can also say "check the memory for X" explicitly.
-- **If nothing is found it tells you plainly — it never fabricates.**
-
-### Tech choices (TechChoice)
-
-For frontend/backend/language/approach/config selections the plugin follows the **three-tier rule** (see the dedicated section below): 2+ candidates → show all for you to pick; exactly 1 → use it directly; no tech named but a dimension keyword is hit (e.g. "frontend") → resolve via that dimension's memory; a new approach/switch/config → append-only update, never overwrite prior candidates.
-
-### Examples: how to remember, how to look up
-
-```text
-// ① Remember a store fact (Fact)
-User: 记住,我的三家门店是韶山/湘乡/塘厦,共用局域网共享文件夹
-Agent: okf_remember(title="门店布局", type="Fact",
-        content="# 核心\n\n三家门店共用局域网共享文件夹…", tags=["门店"])
-       → Memory saved: fact/门店布局
-
-// ② Remember a frontend choice (TechChoice)
-User: 前端就用 React 18 + Vite 吧
-Agent: okf_remember(type="TechChoice", title="前端方案",
-        content="## Options\n\n| 候选 | 状态 |\n|---|---|\n| React 18 + Vite | active |",
-        tags=["前端","技术选型"])
-
-// ③ Querying a database — recall first (instead of scanning local files)
-User: 帮我查询数据库
-Agent: okf_search(query="查询数据库")
-       → hit「鼎赞数据统一用 mcp-dezensaas-mysql」
-       → route to the mcp-dezensaas-mysql service
-```
-
-## Visual Graph (DSH conversation-view tab)
-
-The plugin ships a `client-plugin` that registers a "**Memory Graph**" tab in the DSH web conversation view:
-
-- **Force-directed graph**: node size = weight, color = type (fact/preference/decision/method/insight/idea/lesson/techchoice), lines = cross-links
-- **Search hit**: type in the top box to hit title/type/tags → the hit node gets a white border + pulse halo + `⚡hit`, plus BFS spreading to related nodes
-- **Interaction**: wheel zoom, drag-pan, drag nodes, hover for details (title/type/weight/description/tags)
-
-Data comes from the backend `/okf-graph` route (webServer, web profile only), served by the `okf_graph` tool / `service.graph`.
-
-## Memory Library Layout
-
-Default `~/.dsh/memory/` (overridable via `OKF_MEMORY_ROOT`):
+Once installed, the plugin injects a "memory discipline" prompt and pi decides on its own what to store and what to look up:
 
 ```
-~/.dsh/memory/
-├── index.md              ← Progressive catalog (okf_version: "0.1")
-├── log.md                ← Change history (## YYYY-MM-DD)
-├── fact/                 ← Fact
-├── preference/           ← Preference
-├── decision/             ← Decision (three-section: Data / Analysis / Conclusion)
-├── method/               ← Method
-├── insight/              ← Insight
-├── idea/                 ← Idea
-├── lesson/               ← Lesson
-├── techchoice/           ← TechChoice (Options table + Active)
-└── .meta/weights.json    ← Learning weights (does not affect OKF compliance)
+You: Remember — my three stores are Shaoshan/Xiangxiang/Tangxia, sharing a LAN folder
+     → pi judges value, dedupes, writes the concept, updates the index
+
+You: Where should revenue queries go?
+     → pi runs okf_search first, then answers from memory instead of guessing
+
+You: Search memory for anything about stores
+     → explicit recall
 ```
 
-## TechChoice Three-Tier Rule (user-defined protocol)
+### 6 tools (called by pi autonomously)
 
-1. **2+ candidates** matched → present **all** candidates to the user; never decide on your own
-2. **1 candidate** → use it directly
-3. No specific technology mentioned but a dimension keyword is hit (e.g. "frontend") → resolve via that dimension's memory
-4. New technology / switch / config details → append-only update, never overwrite old candidates (keeps v1→vN evolution history)
+| Tool | Purpose |
+|---|---|
+| `okf_remember` | Write a concept (type validation → dedupe → section-level merge → persist) |
+| `okf_search` | Recall ranked by relevance × weight × recency; `TechChoice` hits include the full options table |
+| `okf_read` | Read a concept in full (with cross-links) and record one usage feedback |
+| `okf_forget` | Withdraw a concept (file kept by default for traceability; optionally delete) |
+| `okf_graph` | Export the graph JSON (nodes / edges / timeline) |
+| `okf_feedback` | User selected `+1.0` / skipped `−0.5` — moves weights directly |
+
+### 4 commands
+
+| Command | Purpose |
+|---|---|
+| `/memory` | Library status: root, concept count, weight leaderboard |
+| `/memory-search <query>` | Search from the terminal |
+| `/memory-graph` | Export a **single self-contained** interactive HTML graph and open it |
+| `/memory-consolidate` | Run consolidation now (decay + archive) |
+
+### What gets remembered
+
+| Worth storing ✅ | Not worth storing ❌ |
+|---|---|
+| New background facts, preferences, habits | Greetings, process chatter |
+| Decisions **and their rationale** | One-off tasks |
+| Reusable methods, processes, lessons | Restating what's already stored |
+| **When you correct pi** (strongest signal) | Unverified guesses (goes to `Idea` until it matures) |
+| Counter-intuitive findings you confirm | |
+| Technology choices (frontend/backend/language/approach/config) | |
+
+## How it works
+
+```
+capture ──→ conceptualize ──→ persist ──→ recall
+  │            │                 │           │
+  │            │                 │           └─ rank by relevance × weight × recency, write back feedback
+  │            │                 └─ validate type → dedupe by title → section-level merge → update index/log
+  │            └─ 8-type vocabulary + OKF v0.1 frontmatter validation
+  └─ pi decides whether this turn produced knowledge worth keeping
+```
+
+### Weighted learning
+
+Recall score is `relevance × weight × recency`, and weight follows your behaviour:
+
+| Behaviour | Weight |
+|---|---|
+| User selects / confirms an option | **+1.0** |
+| User skips / rejects | **−0.5** |
+| Concept read and used | +0.1 |
+| Untouched for 30 days | starts decaying (`0.9^(days over 30 / 30)`) |
+| Weight < 0.3 | archived (`inactive` — **never deleted, revivable**) |
+| Used again after archiving | restored to ≥ 0.6 |
+
+Decay is **incremental**: if no time has passed, nothing is deducted. Running consolidation repeatedly gives exactly the same result as running it once.
+
+### TechChoice three-tier rule (built-in protocol)
+
+For frontend/backend/language/approach/config decisions:
+
+1. **2+ candidates match** → present all of them and let you choose; never decide unilaterally
+2. **1 candidate matches** → use it directly
+3. You didn't name a technology but the message matches a dimension keyword (e.g. "frontend") → handle via that dimension's memory
+4. You propose a new option / switch / config → **append** rather than overwrite (keeps the v1→vN trail)
+
+## Memory library layout
+
+Defaults to `~/.pi/agent/okf-memory/` (override with `OKF_MEMORY_ROOT`):
+
+```
+~/.pi/agent/okf-memory/
+├── index.md            ← progressive index (okf_version: "0.1")
+├── log.md              ← change history (## YYYY-MM-DD)
+├── fact/               ← background facts
+├── preference/         ← preferences
+├── decision/           ← decisions (three-part: data / analysis / conclusion)
+├── method/             ← methodologies
+├── insight/            ← insights
+├── idea/               ← unformed ideas
+├── lesson/             ← lessons learned
+├── techchoice/         ← technology choices (Options table + Active)
+└── .meta/weights.json  ← learning weights (dot dir, keeps OKF conformance clean)
+```
+
+A concept ID *is* its relative path (e.g. `fact/store-layout`), and cross-links use in-bundle absolute paths: `[text](/fact/store-layout.md)`.
+
+## Graph visualization
+
+`/memory-graph` produces a **single self-contained** HTML file (no CDN, no build artifacts) you can double-click or share:
+
+- Node size = weight, colour = type, dashed outline = archived
+- Hover for details, scroll to zoom, drag to pan, drag nodes to rearrange
+- A search hit gets a white ring, a pulse, and `⚡hit`, then **BFS-propagates** along cross-links to light up related memories
 
 ## Configuration
 
 | Item | How | Default |
 |---|---|---|
-| Memory root | env `OKF_MEMORY_ROOT` or settings `okfMemory.root` | `~/.dsh/memory/` |
-| Learning params | `PARAMS` in `lib/learning.js` (decay days / archive threshold / …) | see file |
+| Memory root | `OKF_MEMORY_ROOT` env var | `~/.pi/agent/okf-memory/` |
+| Learning parameters | `PARAMS` in `src/server/learning.ts` | see "Weighted learning" above |
 
-## Development & Testing
+Tuning knobs live in `PARAMS`: `SELECT_DELTA` / `SKIP_DELTA` / `HIT_DELTA` / `DECAY_DAYS` / `DECAY_FACTOR` / `ARCHIVE_THRESHOLD` / `ARCHIVE_RECOVER` / `CONSOLIDATE_INTERVAL_MS`.
+
+## The same core also drives the dsh plugin
+
+The runtime-agnostic core (`src/server/*`) has zero host coupling — its only imports are `node:fs` / `node:path` / `node:os`, and `src/server/index.ts` is the sole dsh adapter. So the dsh plugin `dsh-okf-memory` and the pi extension `pi-okf-memory` share one implementation:
+
+| | pi (this repo's focus) | dsh |
+|---|---|---|
+| Adapter | `src/pi/index.ts` | `src/server/index.ts` |
+| Default library | `~/.pi/agent/okf-memory/` | `~/.dsh/memory/` |
+| Prompt injection | `pi.on("before_agent_start")` | `ctx.systemPrompt.section()` |
+| Graph | `/memory-graph` exports HTML | web conversation-view tab |
+| Tools | 6 | 5 |
+
+Both honour `OKF_MEMORY_ROOT` — point them at the same directory to share one memory library.
+
+## Development & testing
 
 ```sh
-npm test                      # Full suite (smoke + integration + schema + concurrency + regression)
-node scripts/smoke.js         # Core module functional tests (incl. write-lock assertions)
-node scripts/integration.js   # Mock dsh ctx integration tests (incl. error paths)
-node scripts/schema-check.js  # Tool schema compliance
-node scripts/concurrency.js   # Write-lock stress test (50 parallel writes / 5 parallel feedbacks)
-node scripts/regression.js    # P0 regression: lock reentrancy/error recovery, merge edge cases, path traversal, forget idempotency
+pnpm install
+pnpm test          # typecheck + build + 6 suites, 250 assertions, offline & deterministic
+pnpm test:e2e      # real-model end-to-end (needs a token), 9 assertions
 ```
+
+| Layer | Script | What it proves |
+|---|---|---|
+| Type check | `tsc -p tsconfig.typecheck.json` | Adapter usage matches pi's **real `.d.ts`** |
+| Core | `scripts/smoke.js` | store / concept / dedupe / learning / recall / graph |
+| dsh integration | `scripts/integration.js` | 5 tools end-to-end under a mocked dsh ctx |
+| pi integration | `scripts/pi-integration.js` | 6 tools + 4 commands + schema validation under a mocked pi API |
+| **pi real RPC** | `scripts/pi-rpc-commands.js` | Commands are recognised and executed by a **real pi process** |
+| **Real-model E2E** | `scripts/pi-e2e-model.js` | The model really calls the tools, really persists, really recalls across sessions |
+
+**Why the last two layers exist**: a hand-written mock only proves "the code matches my assumptions" — not that the assumptions are right. This project's first real bug slipped through exactly there: the model never knew to pass the `related` parameter, so in real use the graph was always a set of edgeless islands while every mock test stayed green.
+
+**Note**: `tsdown` (rolldown) strips types without checking them, so a passing `pnpm build` does *not* mean the types are correct — `typecheck` is a separate layer.
 
 ## License
 

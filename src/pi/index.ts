@@ -1,5 +1,5 @@
 /**
- * pi 适配层 — dsh-okf-memory 的 pi 扩展入口。
+ * pi 适配层 — okf-memory 的 pi 扩展入口(src/pi/index.ts)。
  *
  * 与 src/server/index.ts(dsh 适配层)平级:两者共用 src/server/* 的运行时无关核心,
  * 本文件只做「pi API ↔ 核心逻辑」的翻译。

@@ -1,5 +1,6 @@
 /**
- * dsh-okf-memory — 会话记忆 → OKF 知识沉淀插件(神经自我学习驱动)。
+ * okf-memory — 会话记忆 → OKF 知识沉淀:dsh 适配层(src/server/index.ts)。
+ * pi 侧入口见 src/pi/index.ts;两者共用本目录下的运行时无关核心。
  *
  * 工具:okf_remember / okf_search / okf_read / okf_forget / okf_graph
  * 服务:ctx.okfMemory(root, search, read, write, consolidate, meta, preload, graph)

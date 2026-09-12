@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const PACKAGE_ID = "dsh-okf-memory";
+const PACKAGE_ID = "pi-okf-memory";
 
 // 浏览器平台模块(DSH web bundle 提供,不打包)
 const PLATFORM_MODULES = [

@@ -1,4 +1,6 @@
 # dsh-okf-memory 挂载声明:把自己插入 Loader
+# 注:本仓库是 pi 扩展 pi-okf-memory 的主场,dsh 插件由 dsh-okf-memory 仓库发布;
+# 这里保留双宿主声明是为了让同一份运行时无关核心仍能被 dsh 加载。
 - insert:
   - id: okf-memory
-    name: dsh-okf-memory
+    name: pi-okf-memory

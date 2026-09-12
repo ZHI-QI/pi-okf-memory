@@ -1,7 +1,7 @@
 {
-  "name": "dsh-okf-memory",
+  "name": "pi-okf-memory",
   "version": "0.1.0",
-  "description": "会话记忆 → OKF 知识沉淀插件:预测驱动的神经自我学习记忆系统。把会话中高价值内容按 OKF v0.1 规范沉淀为长期记忆,跨会话自动唤起。Session-to-OKF memory plugin with neuro-self-learning (predictive recall, uncertainty-driven capture, reinforcement feedback).",
+  "description": "会话记忆 → OKF 知识沉淀的 pi 扩展。把会话中高价值内容按 OKF v0.1 规范自动沉淀为长期记忆，跨会话自动唤起，并基于权重持续学习。Session-to-OKF long-term memory for pi with predictive recall, uncertainty-driven capture and reinforcement feedback.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -18,17 +18,19 @@
     "README.en.md"
   ],
   "keywords": [
-    "dsh-plugin",
-    "okf",
+    "pi-package",
+    "pi-extension",
+    "pi",
     "memory",
+    "okf",
+    "long-term-memory",
     "knowledge",
-    "agent",
-    "memory-system"
+    "agent"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZHI-QI/dsh-okf-memory.git"
+    "url": "https://github.com/ZHI-QI/pi-okf-memory.git"
   },
   "publishConfig": {
     "access": "public"
