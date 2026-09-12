@@ -1,0 +1,164 @@
+/**
+ * dedupe.ts — 去重与互补决策(对应"互补而非复制"原则)。
+ * 写前必查:命中且相同 → skip;命中但互补 → merge 建议 + 交叉链接;未命中 → create。
+ */
+import { promises as fs } from 'node:fs'
+import { parseFrontmatter, type ConceptMeta } from './concept.js'
+import { scanBundle, readConcept, type BundleEntry } from './store.js'
+
+/**
+ * 词项化:空白分词 + CJK 二元组。
+ * 纯子串匹配对中文短语(如「查询数据库」)几乎必然落空,而库中概念标题/描述往往写成
+ * 「查询鼎赞…数据…」。补重叠二元组后,「查询」「数据」等子片段也能命中,提升中文召回。
+ * 保留原始整串词项以维持精确短语加分。
+ */
+function tokenizeQuery(q: string): string[] {
+  const terms = new Set<string>()
+  const raw = String(q || '').split(/\s+/).filter(Boolean)
+  for (const token of raw) {
+    terms.add(token)
+    // 含 CJK 且长度>=3 时,补相邻 2 字符二元组
+    if (/[\u4e00-\u9fff]/.test(token) && token.length >= 3) {
+      for (let i = 0; i < token.length - 1; i++) terms.add(token.slice(i, i + 2))
+    }
+  }
+  return [...terms]
+}
+
+export interface SearchOptions {
+  type?: string
+  tags?: string[]
+  limit?: number
+}
+
+export interface SearchHit {
+  conceptId: string
+  title: string
+  description: string
+  type: string
+  tags: string[]
+  score: number
+}
+
+/**
+ * 全库检索:按关键词匹配 title/description/tags/type(正文做二级加分)。
+ */
+export async function search(root: string, query: string, opts: SearchOptions = {}): Promise<SearchHit[]> {
+  const { type, tags, limit = 20 } = opts
+  const q = String(query || '').trim().toLowerCase()
+  const qTerms = tokenizeQuery(q)
+  const concepts = await scanBundle(root)
+  const hits: SearchHit[] = []
+  for (const c of concepts) {
+    let text: string
+    try {
+      text = await fs.readFile(c.filePath, 'utf8')
+    } catch {
+      continue
+    }
+    const { meta } = parseFrontmatter(text)
+    if (!meta || !meta.type) continue
+    if (type && String(meta.type).toLowerCase() !== String(type).toLowerCase()) continue
+    if (tags && tags.length > 0) {
+      const mt = Array.isArray(meta.tags) ? (meta.tags as string[]).map(String) : []
+      if (!tags.every((t) => mt.some((x) => x.toLowerCase().includes(String(t).toLowerCase())))) continue
+    }
+    let score = 0
+    if (qTerms.length > 0) {
+      const hay = [meta.title, meta.description, Array.isArray(meta.tags) ? (meta.tags as string[]).join(' ') : '', meta.type]
+        .filter(Boolean)
+        .join(' ').toLowerCase()
+      let matched = 0
+      for (const t of qTerms) {
+        if (hay.includes(t)) matched++
+        else if (text.toLowerCase().includes(t)) { score += 0.3; matched++ }
+      }
+      if (matched === 0) continue
+      score += (matched / qTerms.length) * 2
+      if (hay.includes(q)) score += 3 // 完整短语命中加分
+    }
+    score += (Array.isArray(meta.tags) ? (meta.tags as string[]).length : 0) * 0.1
+    hits.push({
+      conceptId: c.conceptId,
+      title: meta.title || c.conceptId,
+      description: meta.description || '',
+      type: meta.type,
+      tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
+      score,
+    })
+  }
+  hits.sort((a, b) => b.score - a.score)
+  return hits.slice(0, limit)
+}
+
+export interface SimilarHit {
+  conceptId: string
+  title: string
+  type: string
+  similarity: number
+}
+
+/**
+ * 按标题找相似概念(去重主查:精确相等或互相包含)。
+ * 包含判定要求较短一方 ≥ MIN_CONTAIN_LEN(3 字符),否则「前端」这种短词
+ * 会误伤「前端方案」,挡住正常新建。
+ */
+const MIN_CONTAIN_LEN = 3
+export async function findSimilarByTitle(root: string, title: string, type?: string): Promise<SimilarHit[]> {
+  const t = String(title || '').trim().toLowerCase()
+  if (!t) return []
+  const concepts = await scanBundle(root)
+  const out: SimilarHit[] = []
+  for (const c of concepts) {
+    let text: string
+    try {
+      text = await fs.readFile(c.filePath, 'utf8')
+    } catch {
+      continue
+    }
+    const { meta } = parseFrontmatter(text)
+    if (!meta || !meta.title) continue
+    if (type && String(meta.type).toLowerCase() !== String(type).toLowerCase()) continue
+    const ct = String(meta.title).trim().toLowerCase()
+    if (ct === t) {
+      out.push({ conceptId: c.conceptId, title: meta.title, type: meta.type, similarity: 1 })
+    } else if ((ct.includes(t) || t.includes(ct)) && Math.min(ct.length, t.length) >= MIN_CONTAIN_LEN) {
+      out.push({ conceptId: c.conceptId, title: meta.title, type: meta.type, similarity: 0.6 })
+    }
+  }
+  return out.sort((a, b) => b.similarity - a.similarity)
+}
+
+export interface DecideInput {
+  title: string
+  type?: string
+  body: string
+}
+
+export interface DecideResult {
+  action: 'skip' | 'update' | 'create'
+  conceptId?: string
+  reason: string
+}
+
+/**
+ * 去重决策。
+ */
+export async function decide(root: string, { title, type, body }: DecideInput): Promise<DecideResult> {
+  const similar = await findSimilarByTitle(root, title, type)
+  if (similar.length > 0) {
+    const top = similar[0]
+    if (top.similarity >= 1) {
+      // 标题完全相同:比较正文长度,内容被覆盖 → update,否则 skip 建议
+      const existing = await readConcept(root, top.conceptId)
+      const bodyLen = String(body || '').trim().length
+      const existingLen = String(existing.body || '').trim().length
+      if (bodyLen > existingLen * 0.7) {
+        return { action: 'update', conceptId: top.conceptId, reason: `标题相同且新正文更完整(${bodyLen}字 vs 已有${existingLen}字),更新已有概念` }
+      }
+      return { action: 'skip', conceptId: top.conceptId, reason: '标题相同的概念已存在,内容未明显增加,跳过写入' }
+    }
+    return { action: 'update', conceptId: top.conceptId, reason: `找到相近概念[${top.title}](similarity ${top.similarity}),建议互补合并或互建交叉链接` }
+  }
+  return { action: 'create', reason: '未命中已有概念,新建' }
+}

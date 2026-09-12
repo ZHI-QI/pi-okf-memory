@@ -1,0 +1,9 @@
+# pnpm v12 用 allowBuilds 显式决定依赖是否运行 postinstall 脚本。
+#
+# 以下三个都是 @earendil-works/pi-coding-agent 的传递依赖,在本项目里只服务于
+# `pnpm typecheck`(读它的 .d.ts),其构建脚本(下载平台二进制等)用不到,
+# 因此显式关闭,既消除 pnpm 的 ignored-builds 报错,也避免执行不必要的脚本。
+allowBuilds:
+  '@google/genai': false
+  esbuild: false
+  protobufjs: false
