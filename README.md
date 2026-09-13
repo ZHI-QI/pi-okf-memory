@@ -1,12 +1,19 @@
 # pi-okf-memory
 
+[简体中文](README.md) | [English](README.en.md)
+
 **会话记忆 → OKF 知识沉淀。让 pi 跨会话记住你。**
 
 把会话里高价值的内容按 [OKF v0.1](https://github.com/open-knowledge-format) 规范自动沉淀成长期记忆,下次开新会话自动唤起。每次选择、跳过、纠正都是学习信号 —— 用得越久,召回越准。
 
-Session-to-OKF long-term memory for [pi](https://pi.dev): durable, human-readable Markdown memory with weighted recall.
+> **English TL;DR** — `pi-okf-memory` distills high-value content from your pi sessions into
+> durable [OKF v0.1](https://github.com/open-knowledge-format) Markdown files and recalls it in later sessions.
+> The memory is yours: plain files you can read, `git`, and edit. Weighted recall sharpens with every pick and skip.
+> **Install:** `pi install npm:pi-okf-memory` (or `pi install git:github.com/ZHI-QI/pi-okf-memory`).
+> One command: `/okf`. Six tools: `okf_remember` / `okf_search` / `okf_read` / `okf_forget` / `okf_graph` / `okf_feedback`.
+> [Full English README →](README.en.md)
 
-![记忆图谱 · 搜索命中与神经传导](docs/记忆图谱-demo.png)
+![记忆图谱 · 搜索命中与神经传导](docs/graph-demo.png)
 
 ---
 
