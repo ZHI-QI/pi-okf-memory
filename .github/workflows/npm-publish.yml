@@ -1,0 +1,121 @@
+name: npm-publish
+
+# 发布到 npm 的两条路径:
+#   1) GitHub Release 发布 → 自动发布到 npm(打 latest 标签)
+#   2) 手动触发(workflow_dispatch)→ 默认只做 dry-run,确认无误后把 dry_run 关掉
+#
+# 前置条件(仓库设置里配一次):
+#   Settings → Secrets and variables → Actions → New repository secret
+#   Name: NPM_TOKEN   Value: 一个 npm Access Token(Automation 类型,绕过 2FA)
+#
+# 为什么用 Automation token:普通 Publish token 在账号开了 2FA 时会要求 OTP,
+# CI 无法交互输入;Automation 类型的 token 专为 CI 设计。
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只做打包校验,不真正发布"
+        type: boolean
+        default: true
+
+# 发布是串行的:同一时间只允许一个发布任务,避免两个 run 撞版本
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # npm provenance(供应链证明)需要 id-token
+  id-token: write
+
+jobs:
+  publish:
+    name: 校验并发布
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      # pi 真实的 RPC 测试层需要 pi 可执行文件;缺了不跳过 —— 静默跳过就是假绿
+      - name: 安装 pi(真实 RPC 测试层需要)
+        run: npm install -g @earendil-works/pi-coding-agent
+
+      # typecheck + build + 6 套件,250 断言
+      # 注意:tsdown 只剥离类型不做检查,所以 typecheck 是独立一层,不能被 build 代替
+      - name: 类型检查 + 构建 + 全量测试
+        run: pnpm test
+
+      - name: 发布元信息
+        id: meta
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "name=$NAME"       >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "打包 $NAME@$VERSION"
+
+      # Release 触发时,校验 tag 与 package.json 版本一致,防止"tag 打了 v1.2.0 却发 1.1.0"
+      - name: 校验 Release tag 与 package.json 版本一致
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG="${TAG#v}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Release tag($TAG)与 package.json 版本($VERSION)不一致"
+            exit 1
+          fi
+          echo "✓ tag $TAG 与 package.json 一致"
+
+      # 防重复发布:npm 不允许覆盖已存在版本
+      - name: 确认该版本尚未发布
+        run: |
+          NAME="${{ steps.meta.outputs.name }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$VERSION 已存在于 npm,请先 bump version 再发 Release"
+            exit 1
+          fi
+          echo "✓ $NAME@$VERSION 尚未发布"
+
+      # 关键守卫:lib/ 在 .gitignore 里,CI 是干净 checkout。
+      # 若构建或 files 配错,包内容会缺文件 —— 这里拦住,不靠发布后才发现
+      - name: 校验包内容(必须含 src/ 与 lib/)
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack.txt
+          for f in "src/pi/index.ts" "lib/index.js" "cordis.patch.yml" "README.md"; do
+            grep -q "$f" /tmp/pack.txt || { echo "::error::包内容缺少 $f"; exit 1; }
+          done
+          echo "✓ 包内容完整"
+
+      - name: Publish(dry-run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: npm publish --dry-run
+
+      - name: Publish
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 发布结果
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        run: |
+          echo "✅ 已发布 ${{ steps.meta.outputs.name }}@${{ steps.meta.outputs.version }}"
+          echo "https://www.npmjs.com/package/${{ steps.meta.outputs.name }}"

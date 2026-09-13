@@ -190,6 +190,38 @@ pnpm test:e2e      # 真实模型端到端(需 token),9 断言
 
 **注意**:`tsdown`(rolldown)只剥离类型、不做类型检查,所以 `pnpm build` 通过 ≠ 类型正确,`typecheck` 是独立一层。
 
+## 发布到 npm
+
+发布由 `.github/workflows/npm-publish.yml` 负责。**首次使用前需配一次 secret**:
+
+1. 去 https://www.npmjs.com/settings/~/tokens 生成一个 **Automation** 类型的 token
+   (必须是 Automation:普通 Publish token 在开了 2FA 的账号上会要 OTP,CI 无法交互输入)
+2. 在仓库 Settings → Secrets and variables → Actions → New repository secret
+   新建 `NPM_TOKEN`,值填上面那个 token
+
+之后两条发布路径:
+
+| 方式 | 行为 |
+|---|---|
+| 发一个 GitHub Release | 自动发布到 npm(打 `latest` 标签) |
+| Actions → npm-publish → Run workflow | 默认 `dry_run = true` 只做校验;确认无误后把开关关掉再跑 |
+
+workflow 会在发布前依次拦截:
+
+- `pnpm test` 全绿(typecheck + 构建 + 250 断言;含需要真实 `pi` 进程的 RPC 测试层)
+- Release tag 与 `package.json` 版本不一致 → 拦
+- 该版本已存在于 npm → 拦(防重复发布)
+- **包内容缺少 `src/` 或 `lib/` → 拦**
+
+最后一条是关键守卫:`lib/` 在 `.gitignore` 里,CI 是干净 checkout。
+`package.json` 的 `prepublishOnly` 会在 `npm publish` 时自动构建,避免发出残缺包。
+
+本地发布(需先 `npm login`):
+
+```sh
+node scripts/release.mjs patch    # bump 版本 + 构建 + dry-run + 发布 + 校验
+```
+
 ## License
 
 MIT
