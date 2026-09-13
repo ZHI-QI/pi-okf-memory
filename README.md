@@ -202,23 +202,45 @@ pnpm test:e2e      # 真实模型端到端(需 token),9 断言
 
 ## 发布到 npm
 
-发布由 `.github/workflows/npm-publish.yml` 负责。**首次使用前需配一次 secret**:
+发布由 `.github/workflows/npm-publish.yml` 负责,认证走 **Trusted Publishing(OIDC)—— 不需要任何 npm token**。
 
-1. 去 https://www.npmjs.com/settings/~/tokens 生成一个 **Automation** 类型的 token
-   (必须是 Automation:普通 Publish token 在开了 2FA 的账号上会要 OTP,CI 无法交互输入)
-2. 在仓库 Settings → Secrets and variables → Actions → New repository secret
-   新建 `NPM_TOKEN`,值填上面那个 token
+### 为什么不用 token
 
-之后两条发布路径:
+npm 在 2026 年收紧了 token 发布:
+
+- 自 2025-11 起不再支持经典 access token,只认 granular token
+- granular token 里「绕过 2FA」的那类,自 2026-07-31 起也**不能再直接发布**
+  (实测报 `403 You may not perform that action with these credentials`)
+
+所以 CI 发布的正路是 OIDC:npm 用本次 workflow 的 OIDC 身份换一个短时 token,
+无需存储任何长期凭据。workflow 里所需的全部权限就是 `id-token: write`。
+
+### 首次使用前:在 npmjs.com 配一次 Trusted Publisher
+
+打开 **https://www.npmjs.com/package/pi-okf-memory/access** → `Trusted Publisher` → 选 GitHub Actions,填:
+
+| 字段 | 值 |
+|---|---|
+| Organization or user | `ZHI-QI` |
+| Repository | `pi-okf-memory` |
+| Workflow filename | `npm-publish.yml`(只填文件名,不带路径) |
+| Environment name | 留空 |
+| Allowed actions | 勾上 **`npm publish`** |
+
+> 这个配置动作本身**需要 2FA**,所以只能人工在网页完成一次。
+> 该端点对**尚未发布**的包名也可用 —— 也就是说可以先配好,再让 CI 发第一个版本。
+
+### 之后两条发布路径
 
 | 方式 | 行为 |
 |---|---|
 | 发一个 GitHub Release | 自动发布到 npm(打 `latest` 标签) |
-| Actions → npm-publish → Run workflow | 默认 `dry_run = true` 只做校验;确认无误后把开关关掉再跑 |
+| Actions → npm-publish → Run workflow | 默认 `dry_run = true` 只做校验;确认后把开关关掉再跑 |
 
 workflow 会在发布前依次拦截:
 
-- `pnpm test` 全绿(typecheck + 构建 + 250 断言;含需要真实 `pi` 进程的 RPC 测试层)
+- `pnpm test` 全绿(typecheck + 构建 + 266 断言;含需要真实 `pi` 进程的 RPC 测试层)
+- npm 版本 < 11.5.1 → 拦(trusted publishing 的硬要求)
 - Release tag 与 `package.json` 版本不一致 → 拦
 - 该版本已存在于 npm → 拦(防重复发布)
 - **包内容缺少 `src/` 或 `lib/` → 拦**
@@ -226,11 +248,17 @@ workflow 会在发布前依次拦截:
 最后一条是关键守卫:`lib/` 在 `.gitignore` 里,CI 是干净 checkout。
 `package.json` 的 `prepublishOnly` 会在 `npm publish` 时自动构建,避免发出残缺包。
 
-本地发布(需先 `npm login`):
+### 本地发布
+
+本地发布需要交互式 2FA,适合首次破壳或 token 路子完全走不通时:
 
 ```sh
-node scripts/release.mjs patch    # bump 版本 + 构建 + dry-run + 发布 + 校验
+npm login          # 浏览器 / OTP 完成 2FA
+npm publish --access public
 ```
+
+已有一个 `node scripts/release.mjs` 脚本(bump 版本 → 构建 → dry-run → 发布),但它走 token 路子,
+在当前的 npm 政策下**已不可用**,仅作参考保留。
 
 ## License
 
