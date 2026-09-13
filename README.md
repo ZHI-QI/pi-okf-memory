@@ -2,6 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md)
 
+[![npm](https://img.shields.io/npm/v/pi-okf-memory?color=cb3837&logo=npm)](https://www.npmjs.com/package/pi-okf-memory)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![pi extension](https://img.shields.io/badge/pi-extension-6f42c1)](https://pi.dev)
+[![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
+
 **会话记忆 → OKF 知识沉淀。让 pi 跨会话记住你。**
 
 把会话里高价值的内容按 [OKF v0.1](https://github.com/open-knowledge-format) 规范自动沉淀成长期记忆,下次开新会话自动唤起。每次选择、跳过、纠正都是学习信号 —— 用得越久,召回越准。
@@ -126,6 +131,32 @@ pi -e /path/to/pi-okf-memory/src/pi/index.ts          # 试用,不写配置
 2. 命中 **1 个候选** → 直接使用
 3. 你未指定技术但命中维度关键词(如「前端」)→ 按该维度记忆处理
 4. 你提出新方案/切换/配置 → **追加式更新**,不覆盖旧候选(保留 v1→vN 轨迹)
+
+## 设计依据:每个机制都追得到记忆研究
+
+权重、衰减、归档、检索强化 —— 这些不是拍脑袋定的,各自对应认知心理学与神经科学里的经典结论。
+
+| 机制 | 文献 | 本项目实际怎么做 |
+|---|---|---|
+| **遗忘曲线** | Ebbinghaus (1885) *Über das Gedächtnis* | `decayFactor()`:30 天宽限期后按 `0.9^((t−30)/30)` 幂衰减 |
+| **记忆可用性追踪「需要概率」** | Anderson & Schooler (1991), *Psychological Science* 2(6):396–408 | 权重 = 使用频率(选中 +1.0 / 精读 +0.1)+ 近因 `1/(1+days/30)` |
+| **存储强度 ≠ 提取强度** | Bjork & Bjork (1992), *From Learning Processes to Cognitive Processes* | 归档只置 `state: inactive`,**文件不删**;再用可把权重抬回 |
+| **提取练习效应(测试效应)** | Roediger & Karpicke (2006), *Psychological Science* 17(3):249–255 | `okf_read` 精读一次即写回权重反馈 |
+| **激活扩散** | Collins & Loftus (1975), *Psychological Review* 82(6):407–428 | `/okf graph` 命中后沿交叉链接 BFS 传导点亮 |
+| **半衰期回归** | Settles & Meeder (2016), *ACL* pp.1848–1858 | `PARAMS` 把衰减参数化(`DECAY_DAYS`/`DECAY_FACTOR`),可调 |
+| **长时程增强(LTP)** | Bliss & Lømo (1973), *J. Physiol.* 232(2):331–356 | 每次使用权重递增,上限 10 |
+
+### 边界说明(不吹)
+
+上面是**设计类比**,不是「本插件实现了神经科学」。差别具体在哪:
+
+- **权重是一张 JSON 表**,不是脉冲神经网络 —— 没有神经元、没有突触、没有膜电位
+- **交叉链接靠写入时显式传 `related`**,不做共现自动统计 —— 所以**不是** Hebbian 自动联想
+- **激活扩散只用于可视化**,不参与权重计算
+- **半衰期是固定参数**,没做个性化拟合 —— 而 Settles & Meeder 那篇的核心恰恰是「拟合」
+
+写清楚这些,是因为「参考了哪些研究的结论」和「实现了多少」是两件事。
+知道边界在哪,你才能判断它适不适合你的场景。
 
 ## 记忆库结构
 

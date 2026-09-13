@@ -2,6 +2,11 @@
 
 [简体中文](README.md) | English
 
+[![npm](https://img.shields.io/npm/v/pi-okf-memory?color=cb3837&logo=npm)](https://www.npmjs.com/package/pi-okf-memory)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![pi extension](https://img.shields.io/badge/pi-extension-6f42c1)](https://pi.dev)
+[![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
+
 **Session memory → OKF knowledge. Make pi remember you across sessions.**
 
 High-value content from your sessions is distilled into long-term memory as [OKF v0.1](https://github.com/open-knowledge-format) documents, and recalled automatically in later sessions. Every pick, skip and correction is a learning signal — recall gets sharper the longer you use it.
@@ -125,6 +130,31 @@ For frontend/backend/language/approach/config decisions:
 2. **1 candidate matches** → use it directly
 3. You didn't name a technology but the message matches a dimension keyword (e.g. "frontend") → handle via that dimension's memory
 4. You propose a new option / switch / config → **append** rather than overwrite (keeps the v1→vN trail)
+
+## Design rationale: every mechanism traces to memory research
+
+Weights, decay, archiving, retrieval-driven reinforcement — none of this is invented. Each piece maps onto a classic result in cognitive psychology or neuroscience.
+
+| Mechanism | Reference | What this project actually does |
+|---|---|---|
+| **Forgetting curve** | Ebbinghaus (1885), *Über das Gedächtnis* | `decayFactor()`: after a 30-day grace period, power decay `0.9^((t−30)/30)` |
+| **Memory availability tracks need probability** | Anderson & Schooler (1991), *Psychological Science* 2(6):396–408 | Weight = usage frequency (select +1.0 / read +0.1) + recency `1/(1+days/30)` |
+| **Storage strength ≠ retrieval strength** | Bjork & Bjork (1992), *From Learning Processes to Cognitive Processes* | Archiving only sets `state: inactive` — **files are never deleted**, and re-use lifts the weight back |
+| **Retrieval practice (testing effect)** | Roediger & Karpicke (2006), *Psychological Science* 17(3):249–255 | One `okf_read` writes a weight feedback |
+| **Spreading activation** | Collins & Loftus (1975), *Psychological Review* 82(6):407–428 | `/okf graph` propagates a BFS highlight along cross-links on a search hit |
+| **Half-life regression** | Settles & Meeder (2016), *ACL* pp.1848–1858 | `PARAMS` parameterises decay (`DECAY_DAYS` / `DECAY_FACTOR`) |
+| **Long-term potentiation** | Bliss & Lømo (1973), *J. Physiol.* 232(2):331–356 | Weight rises on every use, capped at 10 |
+
+### Where the analogy stops (no overclaiming)
+
+The table above describes a **design analogy**, not "this plugin implements neuroscience". Concretely:
+
+- **The weights are a JSON table** — not a spiking neural network. No neurons, synapses, or membrane potentials.
+- **Cross-links come from an explicit `related` argument**, with no co-occurrence statistics — so this is **not** Hebbian auto-association.
+- **Spreading activation is visualization only** — it never feeds back into weights.
+- **The half-life is a fixed parameter** — there is no per-item fitting, which is precisely the core of Settles & Meeder.
+
+We spell this out because "which results inspired the design" and "how much of them is implemented" are two different claims. Knowing the boundary is how you decide whether this fits your use case.
 
 ## Memory library layout
 

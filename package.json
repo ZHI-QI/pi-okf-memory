@@ -1,6 +1,6 @@
 {
   "name": "pi-okf-memory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "会话记忆 → OKF 知识沉淀的 pi 扩展。把会话中高价值内容按 OKF v0.1 规范自动沉淀为长期记忆，跨会话自动唤起，并基于权重持续学习。Session-to-OKF long-term memory for pi with predictive recall, uncertainty-driven capture and reinforcement feedback.",
   "type": "module",
   "packageManager": "pnpm@12.4.1",
