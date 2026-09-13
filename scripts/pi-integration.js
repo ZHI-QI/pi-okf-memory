@@ -92,10 +92,14 @@ assert('search schema 接受可选类型过滤', Value.Check(searchTool.paramete
 assert('feedback schema 拒绝缺必填', !Value.Check(feedbackTool.parameters, { concept_id: 'x' }))
 
 // 命令
-assert('注册 /memory', commands.has('memory'))
-assert('注册 /memory-search', commands.has('memory-search'))
-assert('注册 /memory-graph', commands.has('memory-graph'))
-assert('注册 /memory-consolidate', commands.has('memory-consolidate'))
+assert('注册 /okf(单入口)', commands.has('okf'))
+assert('/okf 带 description', typeof commands.get('okf').description === 'string' && commands.get('okf').description.length > 10)
+assert('/okf 提供参数补全', typeof commands.get('okf').getArgumentCompletions === 'function')
+// 只应有一个命令:旧的四个长名必须已腾空,避免双入口混淆
+assert('命令总数 = 1(无残留旧命令)', commands.size === 1, `实际 ${commands.size}: ${[...commands.keys()].join(',')}`)
+for (const old of ['memory', 'memory-search', 'memory-graph', 'memory-consolidate']) {
+  assert(`旧命令 ${old} 已不存在`, !commands.has(old))
+}
 
 // 事件订阅
 assert('订阅 before_agent_start', (handlers.get('before_agent_start') || []).length === 1)
@@ -199,24 +203,44 @@ assert('index 不含已撤回概念', !idx.includes('fact/门店布局'))
 const logText = await fs.readFile(path.join(root, 'log.md'), 'utf8')
 assert('log 含 forgotten 记录', logText.includes('forgotten'))
 
-// ── 命令:/memory ──
-await commands.get('memory').handler('', ctx)
-assert('/memory 输出记忆库状态', uiLog.some((l) => l.msg.includes('记忆库') && l.msg.includes('概念数')))
-assert('/memory 输出权重榜', uiLog.some((l) => l.msg.includes('权重榜')))
+// ── 参数补全(子命令提示)──
+const completions = commands.get('okf').getArgumentCompletions('')
+assert('补全返回 4 个子命令', Array.isArray(completions) && completions.length === 4, JSON.stringify(completions))
+assert('补全项形如 {value,label}', completions.every((c) => typeof c.value === 'string' && typeof c.label === 'string'))
+assert('按前缀过滤补全', commands.get('okf').getArgumentCompletions('s').map((c) => c.value).join(',') === 'status,search')
+assert('带空格后不再补全', commands.get('okf').getArgumentCompletions('search 门') === null)
 
-// ── 命令:/memory-search ──
-await commands.get('memory-search').handler('前端', ctx)
-assert('/memory-search 命中', uiLog.some((l) => l.msg.includes('techchoice/前端方案')))
-await commands.get('memory-search').handler('', ctx)
-assert('/memory-search 空参提示用法', uiLog.some((l) => l.msg.includes('用法')))
-await commands.get('memory-search').handler('zzz-不存在的词', ctx)
-assert('/memory-search 无匹配明说', uiLog.some((l) => l.msg.includes('无匹配')))
+// ── /okf(无参)= status ──
+await commands.get('okf').handler('', ctx)
+assert('/okf 输出记忆库状态', uiLog.some((l) => l.msg.includes('记忆库') && l.msg.includes('概念数')))
+assert('/okf 输出权重榜', uiLog.some((l) => l.msg.includes('权重榜')))
 
-// ── 命令:/memory-graph —— 生成自包含 HTML ──
-await commands.get('memory-graph').handler('', ctx)
+// ── /okf status 显式子命令 ──
+const before = uiLog.length
+await commands.get('okf').handler('status', ctx)
+assert('/okf status 等价于 /okf', uiLog.slice(before).some((l) => l.msg.includes('概念数')))
+
+// ── /okf search ──
+await commands.get('okf').handler('search 前端', ctx)
+assert('/okf search 命中', uiLog.some((l) => l.msg.includes('techchoice/前端方案')))
+await commands.get('okf').handler('s 前端', ctx)
+assert('/okf s 短别名可用', uiLog.some((l) => l.msg.includes('techchoice/前端方案')))
+await commands.get('okf').handler('search', ctx)
+assert('/okf search 缺参提示用法', uiLog.some((l) => l.msg.includes('用法')))
+await commands.get('okf').handler('search zzz-不存在的词', ctx)
+assert('/okf search 无匹配明说', uiLog.some((l) => l.msg.includes('无匹配')))
+
+// ── /okf help / 未知子命令 ──
+await commands.get('okf').handler('help', ctx)
+assert('/okf help 列出全部子命令', uiLog.some((l) => ['status', 'search', 'graph', 'consolidate'].every((s) => l.msg.includes(s))))
+await commands.get('okf').handler('不存在的子命令', ctx)
+assert('/okf 未知子命令提示用法', uiLog.some((l) => l.msg.includes('未知子命令') && l.msg.includes('用法')))
+
+// ── /okf graph —— 生成自包含 HTML ──
+await commands.get('okf').handler('graph', ctx)
 const note = uiLog[uiLog.length - 1].msg
 const htmlPath = (note.match(/(\/[^\n]+\.html)/) || [])[1]
-assert('/memory-graph 报出 HTML 路径', !!htmlPath, note)
+assert('/okf graph 报出 HTML 路径', !!htmlPath, note)
 if (htmlPath) {
   const html = await fs.readFile(htmlPath, 'utf8')
   assert('HTML 自包含(无外部 http 引用)', !/src=["']https?:|href=["']https?:/.test(html))
@@ -228,9 +252,9 @@ if (htmlPath) {
   await fs.rm(htmlPath, { force: true })
 }
 
-// ── 命令:/memory-consolidate ──
-await commands.get('memory-consolidate').handler('', ctx)
-assert('/memory-consolidate 报告结果', uiLog.some((l) => l.msg.includes('巩固完成')))
+// ── /okf consolidate ──
+await commands.get('okf').handler('consolidate', ctx)
+assert('/okf consolidate 报告结果', uiLog.some((l) => l.msg.includes('巩固完成')))
 
 console.log(`\n结果:${pass} 通过,${fail} 失败`)
 if (fail > 0) process.exit(1)

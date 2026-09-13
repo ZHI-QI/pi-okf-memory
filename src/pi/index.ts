@@ -263,67 +263,107 @@ export default function okfMemoryExtension(pi: ExtensionAPI): void {
   })
 
   // ────────────────────────────── 命令 ──────────────────────────────
+  // 单一入口 /okf + 子命令 — 比 /memory-search、/memory-consolidate 这类长名少敲很多,
+  // 且子命令可 Tab 补全。pi 生态的常见形态(如 /subagents-guide [topic]、/run <agent> [task])。
 
-  pi.registerCommand('memory', {
-    description: '显示 OKF 记忆库状态(根目录 / 概念数 / 权重榜)',
-    handler: async (_args, ctx: ExtensionContext) => {
-      const concepts = await scanBundle(root)
-      const meta = await loadMeta(root)
-      const entries = Object.entries(meta.entries)
-        .sort((a, b) => b[1].weight - a[1].weight)
-        .slice(0, 8)
-      const lines = [
-        `记忆库:${root}`,
-        `概念数:${concepts.length}`,
-        entries.length ? `\n权重榜(前 ${entries.length}):` : '',
-        ...entries.map(([id, e]) => `  ${e.weight.toFixed(2)}  ${e.state === 'inactive' ? '⏸ ' : ''}${id}  (访问 ${e.accessCount} 次)`),
-      ].filter(Boolean)
-      ctx.ui.notify(lines.join('\n'), 'info')
+  /** 子命令表(同时用于参数补全与用法提示) */
+  const SUBS: Array<{ value: string; hint: string }> = [
+    { value: 'status', hint: '库状态 / 概念数 / 权重榜(默认)' },
+    { value: 'search', hint: '搜索记忆:search <关键词>' },
+    { value: 'graph', hint: '导出单文件自包含图谱 HTML 并打开' },
+    { value: 'consolidate', hint: '立即跑一次巩固(衰减 + 归档)' },
+  ]
+  const USAGE = '用法:/okf [status | search <关键词> | graph | consolidate]'
+
+  /** /okf(不带参数)= status */
+  const cmdStatus = async (ctx: ExtensionContext): Promise<void> => {
+    const concepts = await scanBundle(root)
+    const meta = await loadMeta(root)
+    const entries = Object.entries(meta.entries)
+      .sort((a, b) => b[1].weight - a[1].weight)
+      .slice(0, 8)
+    const lines = [
+      `记忆库:${root}`,
+      `概念数:${concepts.length}`,
+      entries.length ? `\n权重榜(前 ${entries.length}):` : '',
+      ...entries.map(([id, e]) => `  ${e.weight.toFixed(2)}  ${e.state === 'inactive' ? '⏸ ' : ''}${id}  (访问 ${e.accessCount} 次)`),
+    ].filter(Boolean)
+    ctx.ui.notify(lines.join('\n'), 'info')
+  }
+
+  const cmdSearch = async (q: string, ctx: ExtensionContext): Promise<void> => {
+    const query = q.trim()
+    if (!query) {
+      ctx.ui.notify('用法:/okf search <关键词>', 'warning')
+      return
+    }
+    const hits = await preload(root, query, { limit: 8 })
+    if (hits.length === 0) {
+      ctx.ui.notify(`记忆库无匹配:「${query}」`, 'info')
+      return
+    }
+    ctx.ui.notify(
+      hits.map((h) => `${h.weight.toFixed(2)}  ${h.conceptId} (${h.type}) — ${h.description}`).join('\n'),
+      'info',
+    )
+  }
+
+  const cmdGraph = async (ctx: ExtensionContext): Promise<void> => {
+    const g = await buildGraph(root)
+    const out = path.join(os.tmpdir(), `okf-memory-graph-${Date.now()}.html`)
+    await fs.writeFile(out, renderGraphHtml(g), 'utf8')
+    try {
+      await pi.exec('open', [out])
+      ctx.ui.notify(`已打开记忆图谱(${g.nodes.length} 节点 / ${g.edges.length} 边)\n${out}`, 'info')
+    } catch (e) {
+      ctx.ui.notify(`图谱已生成(自动打开失败:${String((e as Error).message || e)}):\n${out}`, 'warning')
+    }
+  }
+
+  const cmdConsolidate = async (ctx: ExtensionContext): Promise<void> => {
+    const meta = await consolidate(root)
+    const entries = Object.values(meta.entries)
+    const inactive = entries.filter((e) => e.state === 'inactive').length
+    ctx.ui.notify(`巩固完成:${entries.length} 条记忆,其中 ${inactive} 条已归档(inactive)`, 'info')
+  }
+
+  pi.registerCommand('okf', {
+    description: 'OKF 记忆库:/okf [status|search <词>|graph|consolidate]',
+    getArgumentCompletions: (prefix: string) => {
+      // 子命令后再跟参数(如 search 之后的关键词)就不再补全
+      if (prefix.includes(' ')) return null
+      const p = prefix.trim()
+      return SUBS.filter((s) => s.value.startsWith(p)).map((s) => ({ value: s.value, label: `${s.value} — ${s.hint}` }))
     },
-  })
-
-  pi.registerCommand('memory-search', {
-    description: '在 OKF 记忆库中检索(用法:/memory-search <关键词>)',
     handler: async (args, ctx: ExtensionContext) => {
-      const q = String(args || '').trim()
-      if (!q) {
-        ctx.ui.notify('用法:/memory-search <关键词>', 'warning')
-        return
+      const raw = String(args || '').trim()
+      const sp = raw.indexOf(' ')
+      const sub = (sp === -1 ? raw : raw.slice(0, sp)).toLowerCase()
+      const rest = sp === -1 ? '' : raw.slice(sp + 1).trim()
+      switch (sub) {
+        case '':
+        case 'status':
+          await cmdStatus(ctx)
+          return
+        case 'search':
+        case 's':
+          await cmdSearch(rest, ctx)
+          return
+        case 'graph':
+        case 'g':
+          await cmdGraph(ctx)
+          return
+        case 'consolidate':
+        case 'c':
+          await cmdConsolidate(ctx)
+          return
+        case 'help':
+        case '?':
+          ctx.ui.notify(`${USAGE}\n\n${SUBS.map((s) => `  ${s.value.padEnd(12)} ${s.hint}`).join('\n')}`, 'info')
+          return
+        default:
+          ctx.ui.notify(`未知子命令「${sub}」\n${USAGE}`, 'warning')
       }
-      const hits = await preload(root, q, { limit: 8 })
-      if (hits.length === 0) {
-        ctx.ui.notify(`记忆库无匹配:「${q}」`, 'info')
-        return
-      }
-      ctx.ui.notify(
-        hits.map((h) => `${h.weight.toFixed(2)}  ${h.conceptId} (${h.type}) — ${h.description}`).join('\n'),
-        'info',
-      )
-    },
-  })
-
-  pi.registerCommand('memory-graph', {
-    description: '导出记忆图谱为交互式 HTML 并用浏览器打开',
-    handler: async (_args, ctx: ExtensionContext) => {
-      const g = await buildGraph(root)
-      const out = path.join(os.tmpdir(), `okf-memory-graph-${Date.now()}.html`)
-      await fs.writeFile(out, renderGraphHtml(g), 'utf8')
-      try {
-        await pi.exec('open', [out])
-        ctx.ui.notify(`已打开记忆图谱(${g.nodes.length} 节点 / ${g.edges.length} 边)\n${out}`, 'info')
-      } catch (e) {
-        ctx.ui.notify(`图谱已生成(自动打开失败:${String((e as Error).message || e)}):\n${out}`, 'warning')
-      }
-    },
-  })
-
-  pi.registerCommand('memory-consolidate', {
-    description: '立即执行一次记忆巩固(权重衰减 + 归档)',
-    handler: async (_args, ctx: ExtensionContext) => {
-      const meta = await consolidate(root)
-      const entries = Object.values(meta.entries)
-      const inactive = entries.filter((e) => e.state === 'inactive').length
-      ctx.ui.notify(`巩固完成:${entries.length} 条记忆,其中 ${inactive} 条已归档(inactive)`, 'info')
     },
   })
 

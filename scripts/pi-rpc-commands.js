@@ -100,39 +100,59 @@ try {
   await sleep(4000)
   assert('pi RPC 进程存活', proc.exitCode === null, `exitCode=${proc.exitCode} ${stderrBuf.slice(0, 300)}`)
 
-  // ── /memory ──
-  let out = await runCommand('/memory')
+  // ── /okf(单入口 + 子命令)──
+  let out = await runCommand('/okf')
   let msg = out.map((n) => n.message).join('\n')
-  assert('/memory 产生 notify', out.length > 0)
-  assert('/memory 报出记忆库根', msg.includes(root), msg.slice(0, 200))
-  assert('/memory 报出概念数', msg.includes('概念数'), msg.slice(0, 200))
-  assert('/memory 列出权重榜', msg.includes('权重榜'), msg.slice(0, 300))
+  assert('/okf 产生 notify', out.length > 0)
+  assert('/okf 报出记忆库根', msg.includes(root), msg.slice(0, 200))
+  assert('/okf 报出概念数', msg.includes('概念数'), msg.slice(0, 200))
+  assert('/okf 列出权重榜', msg.includes('权重榜'), msg.slice(0, 300))
 
-  // ── /memory-search 有命中 ──
-  out = await runCommand('/memory-search 门店')
+  // ── /okf status 显式子命令 ──
+  out = await runCommand('/okf status')
   msg = out.map((n) => n.message).join('\n')
-  assert('/memory-search 命中概念', msg.includes('fact/门店布局'), msg.slice(0, 200))
+  assert('/okf status 等价于 /okf', msg.includes(root) && msg.includes('概念数'), msg.slice(0, 200))
 
-  // ── /memory-search 无参 → 用法提示 ──
-  out = await runCommand('/memory-search')
+  // ── /okf search 有命中 ──
+  out = await runCommand('/okf search 门店')
   msg = out.map((n) => n.message).join('\n')
-  assert('/memory-search 无参提示用法', msg.includes('用法'), msg.slice(0, 200))
+  assert('/okf search 命中概念', msg.includes('fact/门店布局'), msg.slice(0, 200))
 
-  // ── /memory-search 无命中 → 明说 ──
-  out = await runCommand('/memory-search zzz不存在zzz')
+  // ── 短别名 /okf s ──
+  out = await runCommand('/okf s 门店')
   msg = out.map((n) => n.message).join('\n')
-  assert('/memory-search 无命中明说', msg.includes('无匹配'), msg.slice(0, 200))
+  assert('/okf s 短别名可用', msg.includes('fact/门店布局'), msg.slice(0, 200))
 
-  // ── /memory-consolidate ──
-  out = await runCommand('/memory-consolidate')
+  // ── /okf search 缺关键词 → 用法提示 ──
+  out = await runCommand('/okf search')
   msg = out.map((n) => n.message).join('\n')
-  assert('/memory-consolidate 报告结果', msg.includes('巩固完成'), msg.slice(0, 200))
+  assert('/okf search 缺参提示用法', msg.includes('用法'), msg.slice(0, 200))
 
-  // ── /memory-graph → 真写 HTML 并调用系统 open ──
-  out = await runCommand('/memory-graph', 30000)
+  // ── /okf search 无命中 → 明说 ──
+  out = await runCommand('/okf search zzz不存在zzz')
+  msg = out.map((n) => n.message).join('\n')
+  assert('/okf search 无命中明说', msg.includes('无匹配'), msg.slice(0, 200))
+
+  // ── 未知子命令 → 提示用法 ──
+  out = await runCommand('/okf 不存在的子命令')
+  msg = out.map((n) => n.message).join('\n')
+  assert('/okf 未知子命令提示用法', msg.includes('未知子命令') && msg.includes('用法'), msg.slice(0, 200))
+
+  // ── /okf help ──
+  out = await runCommand('/okf help')
+  msg = out.map((n) => n.message).join('\n')
+  assert('/okf help 列出全部子命令', ['status', 'search', 'graph', 'consolidate'].every((s) => msg.includes(s)), msg.slice(0, 300))
+
+  // ── /okf consolidate ──
+  out = await runCommand('/okf consolidate')
+  msg = out.map((n) => n.message).join('\n')
+  assert('/okf consolidate 报告结果', msg.includes('巩固完成'), msg.slice(0, 200))
+
+  // ── /okf graph → 真写 HTML 并调用系统 open ──
+  out = await runCommand('/okf graph', 30000)
   msg = out.map((n) => n.message).join('\n')
   const m = msg.match(/(\/[^\s]+\.html)/)
-  assert('/memory-graph 报出 HTML 路径', !!m, msg.slice(0, 300))
+  assert('/okf graph 报出 HTML 路径', !!m, msg.slice(0, 300))
   if (m) {
     const html = await fs.readFile(m[1], 'utf8')
     assert('HTML 真实落盘且自包含', html.includes('const GRAPH =') && !/https?:\/\//.test(html), `${html.length} 字节`)
@@ -144,6 +164,10 @@ try {
   // 命令执行期间不应产生 error 级 notify
   const errs = notifies.filter((n) => n.notifyType === 'error')
   assert('命令无 error 级通知', errs.length === 0, JSON.stringify(errs.map((e) => e.message)))
+
+  // 注:不要在这里用「发一条旧命令看会不会产生 notify」来验证命令已删除 ——
+  // 非命令文本会被当成普通提示词送进模型,白白烧 token 并拉长测试。
+  // 「旧命令已不存在」是静态注册信息,由 pi-integration.js 用 mock 断言。
 
   console.log(`\n  (RPC 事件类型统计: ${[...eventTypes.entries()].map(([k, v]) => `${k}×${v}`).join(', ')})`)
 } catch (e) {

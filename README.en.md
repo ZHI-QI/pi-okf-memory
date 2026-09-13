@@ -60,14 +60,17 @@ You: Search memory for anything about stores
 | `okf_graph` | Export the graph JSON (nodes / edges / timeline) |
 | `okf_feedback` | User selected `+1.0` / skipped `−0.5` — moves weights directly |
 
-### 4 commands
+### Commands: just `/okf`
+
+Only **one** command is registered; subcommands complete with Tab (type `/okf ` then Tab).
 
 | Command | Purpose |
 |---|---|
-| `/memory` | Library status: root, concept count, weight leaderboard |
-| `/memory-search <query>` | Search from the terminal |
-| `/memory-graph` | Export a **single self-contained** interactive HTML graph and open it |
-| `/memory-consolidate` | Run consolidation now (decay + archive) |
+| `/okf` | Library status: root, concept count, weight leaderboard |
+| `/okf search <query>` | Search (short alias `/okf s`) |
+| `/okf graph` | Export a **single self-contained** interactive HTML graph and open it (alias `/okf g`) |
+| `/okf consolidate` | Run consolidation now, decay + archive (alias `/okf c`) |
+| `/okf help` | List all subcommands |
 
 ### What gets remembered
 
@@ -138,7 +141,7 @@ A concept ID *is* its relative path (e.g. `fact/store-layout`), and cross-links 
 
 ## Graph visualization
 
-`/memory-graph` produces a **single self-contained** HTML file (no CDN, no build artifacts) you can double-click or share:
+`/okf graph` produces a **single self-contained** HTML file (no CDN, no build artifacts) you can double-click or share:
 
 - Node size = weight, colour = type, dashed outline = archived
 - Hover for details, scroll to zoom, drag to pan, drag nodes to rearrange
@@ -162,7 +165,7 @@ The runtime-agnostic core (`src/server/*`) has zero host coupling — its only i
 | Adapter | `src/pi/index.ts` | `src/server/index.ts` |
 | Default library | `~/.pi/agent/okf-memory/` | `~/.dsh/memory/` |
 | Prompt injection | `pi.on("before_agent_start")` | `ctx.systemPrompt.section()` |
-| Graph | `/memory-graph` exports HTML | web conversation-view tab |
+| Graph | `/okf graph` exports HTML | web conversation-view tab |
 | Tools | 6 | 5 |
 
 Both honour `OKF_MEMORY_ROOT` — point them at the same directory to share one memory library.

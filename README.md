@@ -62,14 +62,17 @@ pi -e /path/to/pi-okf-memory/src/pi/index.ts          # 试用,不写配置
 | `okf_graph` | 导出图谱 JSON(nodes / edges / timeline) |
 | `okf_feedback` | 用户选中 `+1.0` / 跳过 `−0.5`,直接调权重 |
 
-### 4 个命令
+### 命令:一个 `/okf` 就够
+
+只注册**一个**命令,子命令可 Tab 补全(输入 `/okf ` 后按 Tab)。
 
 | 命令 | 作用 |
 |---|---|
-| `/memory` | 记忆库状态:根目录 / 概念数 / 权重榜 |
-| `/memory-search <关键词>` | 终端内检索 |
-| `/memory-graph` | 导出**单文件自包含**交互式图谱 HTML 并打开 |
-| `/memory-consolidate` | 立即跑一次巩固(衰减 + 归档) |
+| `/okf` | 记忆库状态:根目录 / 概念数 / 权重榜 |
+| `/okf search <关键词>` | 检索(短别名 `/okf s`) |
+| `/okf graph` | 导出**单文件自包含**交互式图谱 HTML 并打开(短别名 `/okf g`) |
+| `/okf consolidate` | 立即跑一次巩固(衰减 + 归档)(短别名 `/okf c`) |
+| `/okf help` | 列出全部子命令 |
 
 ### 什么值得记
 
@@ -140,7 +143,7 @@ pi -e /path/to/pi-okf-memory/src/pi/index.ts          # 试用,不写配置
 
 ## 可视化图谱
 
-`/memory-graph` 生成**单文件自包含** HTML(无 CDN、无构建产物),双击即可打开或分享:
+`/okf graph` 生成**单文件自包含** HTML(无 CDN、无构建产物),双击即可打开或分享:
 
 - 节点大小 = 权重,颜色 = 类型,虚线描边 = 已归档
 - 悬停看详情,滚轮缩放,拖拽平移,可拖动节点
@@ -164,7 +167,7 @@ pi -e /path/to/pi-okf-memory/src/pi/index.ts          # 试用,不写配置
 | 适配层 | `src/pi/index.ts` | `src/server/index.ts` |
 | 默认记忆库 | `~/.pi/agent/okf-memory/` | `~/.dsh/memory/` |
 | 提示注入 | `pi.on("before_agent_start")` | `ctx.systemPrompt.section()` |
-| 图谱 | `/memory-graph` 导出 HTML | web 对话视图标签 |
+| 图谱 | `/okf graph` 导出 HTML | web 对话视图标签 |
 | 工具 | 6 | 5 |
 
 `OKF_MEMORY_ROOT` 两个宿主都认 —— 指向同一目录即可共享记忆库。
