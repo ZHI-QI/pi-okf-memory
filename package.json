@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZHI-QI/pi-okf-memory.git"
+    "url": "git+https://github.com/ZHI-QI/pi-okf-memory.git"
   },
   "publishConfig": {
     "access": "public"
